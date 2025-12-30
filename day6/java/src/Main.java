@@ -21,4 +21,36 @@ void main() throws IOException, RuntimeException {
         res += colRes;
     }
     IO.println(String.format("Problem 1: %d", res));
+    // Problem 2
+    var res2 = 0L;
+    var buffers = Stream.generate(ArrayList<Character>::new).limit(content.size()).toList();
+    for(int i = 0; i < content.getFirst().length(); i++) {
+        int finalI = i;
+        var chars = content.stream().map((row) -> row.charAt(finalI)).toList();
+        if (chars.stream().allMatch((c) -> c == ' ')) {
+            // all space, separation
+            // Execute the operation on buffer and empty them
+            res2 += processBuffers(buffers);
+            continue;
+        }
+        IntStream.range(0, chars.size()).forEach((j) -> {
+            buffers.get(j).addLast(chars.get(j));
+        });
+    }
+    // Operate again if buffers are not empty
+    if (!buffers.getFirst().isEmpty()) {
+        res2 += processBuffers(buffers);
+    }
+    IO.println(String.format("Problem 2: %d", res2));
+}
+
+long processBuffers(List<ArrayList<Character>> buffers) {
+    var operator = buffers.getLast().getFirst(); // operator
+    var len = buffers.getFirst().size();
+    var numbers = LongStream.range(0, len).map((k) -> Long.parseLong(buffers.subList(0, buffers.size()-1).stream().collect(StringBuilder::new, (acc, cl) -> acc.append(cl.get((int)k)), StringBuilder::append).toString().trim())).boxed().toList();
+    var sessionRes = numbers.stream().reduce(operator == '*' ? 1L : 0L, (acc, x) -> operator == '*'? acc*x : acc+x, Long::sum);
+    for(var b: buffers) {
+        b.clear();
+    }
+    return sessionRes;
 }
