@@ -20,6 +20,7 @@ struct Day7 {
             let content = try String.init(contentsOfFile: "../input.data", encoding: .utf8)
             let grid: [[Character]] = content.split(separator: "\n").map({ Array($0) })  // grid[y][x]
             solvePart1(grid: grid)
+            solvePart2(grid: grid)
         } catch {
             print("error \(error)")
         }
@@ -55,5 +56,34 @@ struct Day7 {
             particles = newParticles
         }
         print("Problem 1: \(splitCount)")
+    }
+
+    static func solvePart2(grid: [[Character]]) {
+        guard let startX = grid[0].firstIndex(of: "S") else {
+            print("No start position found")
+            return
+        }
+        var particles: [Point: Int] = [Point(x: startX, y: 0): 1]
+        let maxY = grid.count - 1
+        while !particles.allSatisfy({ $0.key.y == maxY }) {
+            var newParticles: [Point: Int] = [:]
+            for (particle, n) in particles {
+                guard particle.y < maxY else {
+                    newParticles[particle] = n
+                    print("Particle \(particle) already at the end")
+                    continue
+                }
+                let nextY = particle.y + 1
+                if grid[nextY][particle.x] == "^" {
+                    newParticles[Point(x: particle.x - 1, y: nextY), default: 0] += n
+                    newParticles[Point(x: particle.x + 1, y: nextY), default: 0] += n
+                } else {
+                    newParticles[Point(x: particle.x, y: nextY), default: 0] += n
+                }
+            }
+            particles = newParticles
+        }
+        let totalPart = particles.reduce(0, { $0 + $1.value })
+        print("Problem 2: \(totalPart)")
     }
 }
