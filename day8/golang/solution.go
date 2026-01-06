@@ -123,14 +123,14 @@ func extract_related(junctures []juncture, links []jlink) []circuit {
 }
 
 func problem1(junctures []juncture, link_number int) {
-	var links []jlink
+	linkSet := make(map[jlink]bool)
 	for range link_number {
 		var j1_id, j2_id int
 		var distance = math.MaxFloat64
 		for i, jun1 := range junctures {
 			for j := i + 1; j < len(junctures); j++ {
 				jun2 := junctures[j]
-				if slices.Contains(links, jlink{j1_id: i, j2_id: j}) {
+				if linkSet[jlink{j1_id: i, j2_id: j}] {
 					continue
 				}
 				d := jun1.distance(jun2)
@@ -141,7 +141,11 @@ func problem1(junctures []juncture, link_number int) {
 				}
 			}
 		}
-		links = append(links, jlink{j1_id, j2_id})
+		linkSet[jlink{j1_id, j2_id}] = true
+	}
+	links := make([]jlink, 0, len(linkSet)) // type, length, capacity
+	for link := range linkSet {
+		links = append(links, link)
 	}
 	// Identify clusters
 	fmt.Printf("Links: %v\n", links)
