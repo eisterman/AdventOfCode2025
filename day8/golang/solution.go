@@ -1,13 +1,13 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -72,99 +72,109 @@ func main() {
 	problem1(table, link_number)
 }
 
-type jlink struct {
-	j1_id int
-	j2_id int
+type link struct {
+	distance float64
+	j1_id    int
+	j2_id    int
 }
 
-type circuit struct {
-	juncture_ids []int
-}
-
-func extract_related(junctures []juncture, links []jlink) []circuit {
-	var to_distribute []int
+func calculate_shortest_links(junctures []juncture, link_number int) []link {
+	perfs := [3]int{}
+	lowest_links := make([]link, 0, link_number)
+	var max_distance = 0.
 	for i := range junctures {
-		to_distribute = append(to_distribute, i)
+		for j := i + 1; j < len(junctures); j++ {
+			distance := junctures[i].distance(junctures[j])
+			thislink := link{distance: distance, j1_id: i, j2_id: j}
+			if len(lowest_links) < link_number {
+				lowest_links = append(lowest_links, thislink)
+				slices.SortFunc(lowest_links, func(a, b link) int {
+					return cmp.Compare(a.distance, b.distance)
+				})
+				max_distance = max(max_distance, distance)
+				perfs[0]++
+			} else if distance < max_distance {
+				lowest_links = append(lowest_links[:link_number-1], thislink)
+				max_distance = max(distance, lowest_links[link_number-2].distance)
+				slices.SortFunc(lowest_links, func(a, b link) int {
+					return cmp.Compare(a.distance, b.distance)
+				})
+				perfs[1]++
+			} else {
+				perfs[2]++
+			}
+		}
 	}
-	var result []circuit
-	for len(to_distribute) > 0 {
-		junc_id := to_distribute[0]
-		var associated = []int{junc_id}
-		var changed = true
-		for changed {
-			changed = false
-			for _, link := range links {
-				j1_contained := slices.Contains(associated, link.j1_id)
-				j2_contained := slices.Contains(associated, link.j2_id)
-				if j1_contained && j2_contained {
-					// If both are already associated, nothing to do
-					continue
-				} else if j1_contained {
-					associated = append(associated, link.j2_id)
-					changed = true
-				} else if j2_contained {
-					associated = append(associated, link.j1_id)
-					changed = true
+	fmt.Printf("Performance Shortest Links: %v\n", perfs)
+	return lowest_links
+}
+
+func identify_clusters(links []link) [][]int {
+	perfs := [4]int{}      // automatically zeroed
+	var latest_circuit = 0 // when key is missing, Go maps return fking ZERO WTF
+	circuits := make(map[int]int)
+	for _, lnk := range links {
+		// If you use the single return value,
+		//  you get a generic "zero" if the key doesn't exists.
+		j1_circuit, j1_exists := circuits[lnk.j1_id]
+		j2_circuit, j2_exists := circuits[lnk.j2_id]
+		if j1_exists && j2_exists {
+			// This heavy branch is still the most done, around 43% of times
+			// I can, if needed, use a second map for the relation val -> key
+			perfs[0]++
+			if j1_circuit != j2_circuit {
+				// j2_circuit --> j1_circuit
+				for key, val := range circuits {
+					if val == j2_circuit {
+						circuits[key] = j1_circuit
+					}
 				}
 			}
+		} else if j1_exists {
+			perfs[1]++
+			circuits[lnk.j2_id] = j1_circuit
+		} else if j2_exists {
+			perfs[2]++
+			circuits[lnk.j1_id] = j2_circuit
+		} else {
+			perfs[3]++
+			circuits[lnk.j1_id] = latest_circuit
+			circuits[lnk.j2_id] = latest_circuit
+			latest_circuit++
 		}
-		// Create circuit
-		result = append(result, circuit{juncture_ids: associated})
-		// Remove distributed from to_distribute
-		var c []int
-		for _, idx := range to_distribute {
-			if !slices.Contains(associated, idx) {
-				c = append(c, idx)
-			}
-		}
-		to_distribute = c
 	}
-	return result
+	fmt.Printf("Performance Identify Clusters Map: %v\n", perfs)
+	clusters := make(map[int][]int)
+	for j_id, circuit_id := range circuits {
+		circuit, exists := clusters[circuit_id]
+		if !exists {
+			circuit = []int{j_id}
+		} else {
+			circuit = append(circuit, j_id)
+		}
+		clusters[circuit_id] = circuit
+	}
+	list_of_circuits := [][]int{}
+	for _, val := range clusters {
+		list_of_circuits = append(list_of_circuits, val)
+	}
+	return list_of_circuits
 }
 
 func problem1(junctures []juncture, link_number int) {
-	linkSet := make(map[jlink]bool)
-	for range link_number {
-		var j1_id, j2_id int
-		var distance = math.MaxFloat64
-		for i, jun1 := range junctures {
-			for j := i + 1; j < len(junctures); j++ {
-				jun2 := junctures[j]
-				if linkSet[jlink{j1_id: i, j2_id: j}] {
-					continue
-				}
-				d := jun1.distance(jun2)
-				if d < distance {
-					distance = d
-					j1_id = i
-					j2_id = j
-				}
-			}
-		}
-		linkSet[jlink{j1_id, j2_id}] = true
+	lowest_links := calculate_shortest_links(junctures, link_number)
+	circuits := identify_clusters(lowest_links)
+	lengths := []int{}
+	for _, circuit := range circuits {
+		lengths = append(lengths, len(circuit))
 	}
-	links := make([]jlink, 0, len(linkSet)) // type, length, capacity
-	for link := range linkSet {
-		links = append(links, link)
-	}
-	// Identify clusters
-	fmt.Printf("Links: %v\n", links)
-	var circuits = extract_related(junctures, links)
-	for i, c := range circuits {
-		fmt.Printf("Circuit %d has %d junctions %v\n", i, len(c.juncture_ids), c.juncture_ids)
-	}
-	// Result is size of 3 greatest circuits
-	var sizes []int
-	for _, c := range circuits {
-		sizes = append(sizes, len(c.juncture_ids))
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(sizes)))
-	var result = 1
-	for i, length := range sizes {
-		if i >= 3 {
-			break
-		}
-		result *= length
+	// I don't really like this one because it doesn't scream "Reverse Sort" at all,
+	//   even if more modern and simpler.
+	slices.SortFunc(lengths, func(a, b int) int { return b - a })
+	// To use the 3 greatest circuit lengths is a fixed parameter of the algorithm
+	result := 1
+	for i := range 3 {
+		result *= lengths[i]
 	}
 	fmt.Printf("Problem 1: %d\n", result)
 }
